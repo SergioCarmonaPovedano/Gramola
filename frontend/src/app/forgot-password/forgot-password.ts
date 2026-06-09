@@ -1,8 +1,9 @@
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
+
+import { UserService } from '../services/user.service';
 
 @Component({
   selector: 'app-forgot-password',
@@ -19,7 +20,7 @@ export class ForgotPasswordComponent {
   emailSent: boolean = false;
 
   constructor(
-    private http: HttpClient,
+    private userService: UserService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -55,9 +56,7 @@ export class ForgotPasswordComponent {
       }
     }, 6000);
 
-    this.http.post<any>('http://127.0.0.1:8080/users/forgotPassword', {
-      email: requestedEmail
-    }).subscribe({
+    this.userService.forgotPassword(requestedEmail).subscribe({
       next: (res) => {
         clearTimeout(safetyTimer);
 

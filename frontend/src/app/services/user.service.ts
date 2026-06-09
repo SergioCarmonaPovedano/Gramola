@@ -47,4 +47,18 @@ export class UserService {
 
     return this.http.post<any>(`${this.apiUrl}/validateOwnerPassword`, body);
   }
+
+    forgotPassword(email: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/forgotPassword`, {
+      email: email
+    });
+  }
+
+  resetPassword(token: string, password: string, confirmPassword: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/resetPassword`, {
+      token: token,
+      pwd1: password,
+      pwd2: confirmPassword
+    });
+  }
 }

@@ -1,13 +1,13 @@
 import { Component, OnDestroy, OnInit, ChangeDetectorRef, Inject, PLATFORM_ID } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { forkJoin, interval, Subscription } from 'rxjs';
 
 import { SpotiService } from '../services/spoti.service';
 import { QueueService } from '../services/queue.service';
 import { UserService } from '../services/user.service';
+import { PaymentService } from '../services/payment.service';
 
 declare var Stripe: any;
 
@@ -19,7 +19,6 @@ declare var Stripe: any;
   styleUrls: ['./music.css']
 })
 export class MusicComponent implements OnInit, OnDestroy {
-  private readonly backendUrl = 'http://127.0.0.1:8080';
   private readonly stripePublicKey = 'pk_test_51Tc8UDJX5eRLV69oXaS33MzSgxXxOC2TmP7zd5DXINOXj9FjnbodD183t63CCmJxmkMr8HtxW8LYDf1IDuhowafJ00celKzaA2';
 
   private readonly endThresholdMs = 2500;
@@ -69,14 +68,14 @@ export class MusicComponent implements OnInit, OnDestroy {
 private priorityPlaybackSpotifyId: string | null = null;
 
   constructor(
-    private spoti: SpotiService,
-    private queueService: QueueService,
-    private userService: UserService,
-    private cdr: ChangeDetectorRef,
-    private http: HttpClient,
-    private router: Router,
-    @Inject(PLATFORM_ID) private platformId: Object
-  ) { }
+  private spoti: SpotiService,
+  private queueService: QueueService,
+  private userService: UserService,
+  private paymentService: PaymentService,
+  private cdr: ChangeDetectorRef,
+  private router: Router,
+  @Inject(PLATFORM_ID) private platformId: Object
+) { }
 
   ngOnInit(): void {
     if (!this.isBrowser()) {
@@ -564,41 +563,39 @@ private priorityPlaybackSpotifyId: string | null = null;
   }
 
   processPayment(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
-
-    const barEmail = this.getBarEmail();
-
-    if (!barEmail) {
-      this.songError = 'No se ha encontrado el email del bar en la sesión.';
-      return;
-    }
-
-    if (!this.trackPendingPayment) {
-      this.songError = 'No hay ninguna canción pendiente de pago.';
-      return;
-    }
-
-    if (!this.stripe || !this.cardElement) {
-      this.songError = 'El formulario de pago no está preparado.';
-      return;
-    }
-
-    this.songError = undefined;
-
-    this.http.post<any>(`${this.backendUrl}/payments/prepayTrack`, {
-      barEmail: barEmail
-    }).subscribe({
-      next: (transaction) => {
-        this.confirmStripePayment(transaction, barEmail);
-      },
-      error: (err) => {
-        console.error('Error preparando pago de canción:', err);
-        this.songError = 'No se ha podido iniciar el pago.';
-      }
-    });
+  if (!this.isBrowser()) {
+    return;
   }
+
+  const barEmail = this.getBarEmail();
+
+  if (!barEmail) {
+    this.songError = 'No se ha encontrado el email del bar en la sesión.';
+    return;
+  }
+
+  if (!this.trackPendingPayment) {
+    this.songError = 'No hay ninguna canción pendiente de pago.';
+    return;
+  }
+
+  if (!this.stripe || !this.cardElement) {
+    this.songError = 'El formulario de pago no está preparado.';
+    return;
+  }
+
+  this.songError = undefined;
+
+  this.paymentService.prepayTrack(barEmail).subscribe({
+    next: (transaction) => {
+      this.confirmStripePayment(transaction, barEmail);
+    },
+    error: (err) => {
+      console.error('Error preparando pago de canción:', err);
+      this.songError = 'No se ha podido iniciar el pago.';
+    }
+  });
+}
 
   private confirmStripePayment(transaction: any, barEmail: string): void {
     let transactionData = transaction.data;
@@ -636,32 +633,29 @@ private priorityPlaybackSpotifyId: string | null = null;
   }
 
   private confirmPaymentInBackend(transactionId: string, barEmail: string): void {
-    this.http.post(`${this.backendUrl}/payments/confirmTrack`, {
-      transactionId: transactionId,
-      barEmail: barEmail
-    }).subscribe({
-      next: () => {
-        const paidTrack = this.trackPendingPayment;
+  this.paymentService.confirmTrack(transactionId, barEmail).subscribe({
+    next: () => {
+      const paidTrack = this.trackPendingPayment;
 
-        this.cancelPayment();
-        this.saveTrackInDatabase(paidTrack);
+      this.cancelPayment();
+      this.saveTrackInDatabase(paidTrack);
 
-        this.successMessage = 'Pago confirmado. Canción añadida a la cola.';
+      this.successMessage = 'Pago confirmado. Canción añadida a la cola.';
 
-        setTimeout(() => {
-          this.successMessage = null;
-          this.cdr.detectChanges();
-        }, 3000);
-
-        this.refreshGramolaPlaybackState();
+      setTimeout(() => {
+        this.successMessage = null;
         this.cdr.detectChanges();
-      },
-      error: (err) => {
-        console.error('Error confirmando pago de canción en backend:', err);
-        this.songError = 'El pago se hizo en Stripe, pero no se pudo confirmar en el backend.';
-      }
-    });
-  }
+      }, 3000);
+
+      this.refreshGramolaPlaybackState();
+      this.cdr.detectChanges();
+    },
+    error: (err) => {
+      console.error('Error confirmando pago de canción en backend:', err);
+      this.songError = 'El pago se hizo en Stripe, pero no se pudo confirmar en el backend.';
+    }
+  });
+}
 
   private saveTrackInDatabase(spotifyTrack: any): void {
     if (!this.isBrowser()) {
@@ -874,77 +868,72 @@ confirmOwnerMode(): void {
   }
 
   loadTrackPrice(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
-
-    const barEmail = this.getBarEmail();
-
-    if (!barEmail) {
-      this.songError = 'No se ha encontrado el email del bar para cargar el precio.';
-      return;
-    }
-
-    this.http.get<number>(
-      `${this.backendUrl}/payments/trackPrice?barEmail=${encodeURIComponent(barEmail)}`
-    ).subscribe({
-      next: (price: number) => {
-        this.currentPrice = price;
-        this.newTrackPrice = price;
-        this.cdr.detectChanges();
-      },
-      error: (err) => {
-        console.error('Error cargando precio de canción:', err);
-        this.songError = 'No se ha podido cargar el precio de las canciones.';
-      }
-    });
+  if (!this.isBrowser()) {
+    return;
   }
+
+  const barEmail = this.getBarEmail();
+
+  if (!barEmail) {
+    this.songError = 'No se ha encontrado el email del bar para cargar el precio.';
+    return;
+  }
+
+  this.paymentService.getTrackPrice(barEmail).subscribe({
+    next: (price: number) => {
+      this.currentPrice = price;
+      this.newTrackPrice = price;
+      this.cdr.detectChanges();
+    },
+    error: (err) => {
+      console.error('Error cargando precio de canción:', err);
+      this.songError = 'No se ha podido cargar el precio de las canciones.';
+    }
+  });
+}
 
   saveTrackPrice(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
-
-    const barEmail = this.getBarEmail();
-
-    if (!barEmail) {
-      this.priceError = 'No se ha encontrado el email del bar.';
-      return;
-    }
-
-    if (!this.newTrackPrice || this.newTrackPrice <= 0) {
-      this.priceError = 'El precio debe ser mayor que 0.';
-      return;
-    }
-
-    this.priceMessage = null;
-    this.priceError = null;
-
-    this.http.put<any>(`${this.backendUrl}/payments/trackPrice`, {
-      barEmail: barEmail,
-      trackPrice: String(this.newTrackPrice)
-    }).subscribe({
-      next: (res) => {
-        this.currentPrice = res.trackPrice;
-        this.newTrackPrice = res.trackPrice;
-
-        this.priceMessage = res.message || 'Precio actualizado correctamente.';
-        this.showSuccessMessage('Precio por canción actualizado.');
-
-        setTimeout(() => {
-          this.priceMessage = null;
-          this.cdr.detectChanges();
-        }, 3000);
-
-        this.cdr.detectChanges();
-      },
-      error: (err) => {
-        console.error('Error actualizando precio por canción:', err);
-        this.priceError = err.error?.message || 'No se ha podido actualizar el precio.';
-        this.cdr.detectChanges();
-      }
-    });
+  if (!this.isBrowser()) {
+    return;
   }
+
+  const barEmail = this.getBarEmail();
+
+  if (!barEmail) {
+    this.priceError = 'No se ha encontrado el email del bar.';
+    return;
+  }
+
+  if (!this.newTrackPrice || this.newTrackPrice <= 0) {
+    this.priceError = 'El precio debe ser mayor que 0.';
+    return;
+  }
+
+  this.priceMessage = null;
+  this.priceError = null;
+
+  this.paymentService.updateTrackPrice(barEmail, this.newTrackPrice).subscribe({
+    next: (res) => {
+      this.currentPrice = res.trackPrice;
+      this.newTrackPrice = res.trackPrice;
+
+      this.priceMessage = res.message || 'Precio actualizado correctamente.';
+      this.showSuccessMessage('Precio por canción actualizado.');
+
+      setTimeout(() => {
+        this.priceMessage = null;
+        this.cdr.detectChanges();
+      }, 3000);
+
+      this.cdr.detectChanges();
+    },
+    error: (err) => {
+      console.error('Error actualizando precio por canción:', err);
+      this.priceError = err.error?.message || 'No se ha podido actualizar el precio.';
+      this.cdr.detectChanges();
+    }
+  });
+}
 
   trackBySpotifyId(index: number, track: any): string {
     return track.spotifyId || track.id || index.toString();

@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
+
+import { UserService } from '../services/user.service';
 
 @Component({
   selector: 'app-reset-password',
@@ -20,7 +21,7 @@ export class ResetPasswordComponent implements OnInit {
   loading: boolean = false;
 
   constructor(
-    private http: HttpClient,
+    private userService: UserService,
     private route: ActivatedRoute,
     private router: Router
   ) {}
@@ -56,11 +57,11 @@ export class ResetPasswordComponent implements OnInit {
 
     this.loading = true;
 
-    this.http.post<any>('http://127.0.0.1:8080/users/resetPassword', {
-      token: this.token,
-      pwd1: this.password,
-      pwd2: this.confirmPassword
-    }).subscribe({
+    this.userService.resetPassword(
+      this.token,
+      this.password,
+      this.confirmPassword
+    ).subscribe({
       next: () => {
         this.loading = false;
         this.message = 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.';

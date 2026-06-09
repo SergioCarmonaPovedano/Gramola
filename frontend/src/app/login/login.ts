@@ -2,6 +2,7 @@ import { Component, ChangeDetectorRef, OnInit, AfterViewInit, Inject, PLATFORM_I
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService } from '../services/user.service';
+import { SpotiService } from '../services/spoti.service';
 import { RouterModule } from '@angular/router';
 
 @Component({
@@ -20,10 +21,11 @@ export class LoginComponent implements OnInit, AfterViewInit {
   private readonly rememberEmailKey = 'gramola_remember_email';
 
   constructor(
-    private userService: UserService, 
-    private cdr: ChangeDetectorRef,
-    @Inject(PLATFORM_ID) private platformId: Object
-  ) {}
+  private userService: UserService,
+  private spotiService: SpotiService,
+  private cdr: ChangeDetectorRef,
+  @Inject(PLATFORM_ID) private platformId: Object
+) {}
 
   ngOnInit(): void {
     this.loadRememberedEmail();
@@ -113,23 +115,12 @@ export class LoginComponent implements OnInit, AfterViewInit {
   }
 
   private connectWithSpotify(clientId: string): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
-
-    sessionStorage.setItem('clientId', clientId);
-
-    const redirectUri = 'http://127.0.0.1:4200/callback'; 
-    const scopes = 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative';
-    const authorizeUrl = 'https://accounts.spotify.com/authorize';
-
-    const spotifyUrl =
-      `${authorizeUrl}` +
-      `?client_id=${encodeURIComponent(clientId)}` +
-      `&response_type=code` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=${encodeURIComponent(scopes)}`;
-    
-    window.location.href = spotifyUrl;
+  if (!isPlatformBrowser(this.platformId)) {
+    return;
   }
+
+  sessionStorage.setItem('clientId', clientId);
+
+  window.location.href = this.spotiService.buildAuthorizationUrl(clientId);
+}
 }

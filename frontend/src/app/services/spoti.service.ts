@@ -40,6 +40,25 @@ export class SpotiService {
   return this.http.get<any>(url);
 }
 
+  buildAuthorizationUrl(clientId: string): string {
+  const redirectUri = 'http://127.0.0.1:4200/callback';
+  const authorizeUrl = 'https://accounts.spotify.com/authorize';
+
+  const scopes = [
+    'user-read-playback-state',
+    'user-modify-playback-state',
+    'user-read-currently-playing',
+    'playlist-read-private',
+    'playlist-read-collaborative'
+  ];
+
+  return `${authorizeUrl}` +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&response_type=code` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent(scopes.join(' '))}`;
+}
+
   getDevices(): Observable<any> {
     const headers = this.createSpotifyHeaders();
 
