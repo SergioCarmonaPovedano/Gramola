@@ -60,10 +60,18 @@ export class RegisterComponent {
       this.clientSecret.trim()
     ).subscribe({
       next: () => {
+        localStorage.removeItem('gramola_remember_email');
+
+        sessionStorage.removeItem('userEmail');
+        sessionStorage.removeItem('clientId');
+        sessionStorage.removeItem('spotiToken');
+        sessionStorage.removeItem('isOwner');
+        sessionStorage.removeItem('gramola_current_library_index');
+
         this.hasError = false;
         this.message = '¡Registro exitoso! Revisa tu correo electrónico para confirmar la cuenta.';
-        this.cdr.detectChanges(); 
-      },
+        this.cdr.detectChanges();
+    },
       error: (err) => {
         this.hasError = true;
 
