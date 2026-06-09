@@ -3,7 +3,7 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { interval, Subscription } from 'rxjs';
+import { forkJoin, interval, Subscription } from 'rxjs';
 
 import { SpotiService } from '../spoti';
 import { QueueService } from '../queue';
@@ -21,6 +21,9 @@ declare var Stripe: any;
 export class MusicComponent implements OnInit, OnDestroy {
   private readonly backendUrl = 'http://127.0.0.1:8080';
   private readonly stripePublicKey = 'pk_test_51Tc8UDJX5eRLV69oXaS33MzSgxXxOC2TmP7zd5DXINOXj9FjnbodD183t63CCmJxmkMr8HtxW8LYDf1IDuhowafJ00celKzaA2';
+
+  private readonly endThresholdMs = 2500;
+  private readonly libraryIndexKey = 'gramola_current_library_index';
 
   devices: any[] = [];
   queue: any[] = [];
@@ -54,8 +57,10 @@ export class MusicComponent implements OnInit, OnDestroy {
   ownerPasswordLoading: boolean = false;
 
   private autoRefresh?: Subscription;
-  private barMusicStarted: boolean = false;
-  private barMusicRestarting: boolean = false;
+  private currentGramolaTrack: any = null;
+  private currentLibraryIndex: number = -1;
+  private transitionInProgress: boolean = false;
+  private transitionScheduled: boolean = false;
 
   constructor(
     private spoti: SpotiService,
@@ -65,7 +70,7 @@ export class MusicComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     if (!this.isBrowser()) {
@@ -73,12 +78,12 @@ export class MusicComponent implements OnInit, OnDestroy {
     }
 
     this.isOwner = sessionStorage.getItem('isOwner') === 'true';
+    this.currentLibraryIndex = this.readLibraryIndexFromSession();
 
     this.loadInitialData();
 
     this.autoRefresh = interval(3000).subscribe(() => {
-      this.loadQueue();
-      this.getCurrentSong();
+      this.refreshGramolaPlaybackState();
     });
   }
 
@@ -88,10 +93,8 @@ export class MusicComponent implements OnInit, OnDestroy {
 
   private loadInitialData(): void {
     this.getDevices();
-    this.getCurrentSong();
-    this.loadQueue();
     this.loadTrackPrice();
-    this.loadLibrary();
+    this.refreshGramolaPlaybackState();
   }
 
   getDevices(): void {
@@ -108,86 +111,262 @@ export class MusicComponent implements OnInit, OnDestroy {
   }
 
   getCurrentSong(): void {
-  this.spoti.getCurrentlyPlaying().subscribe({
-    next: (result) => {
-      if (result?.item && result.is_playing) {
-        this.title = result.item.name;
-        this.artist = result.item.artists?.[0]?.name || '';
-        this.albumCover = result.item.album?.images?.[1]?.url || '';
+    this.inspectSpotifyPlaybackAndAdvanceIfNeeded();
+  }
 
-        this.markCurrentTrackAsPlayedIfNeeded(result.item.id);
+  private refreshGramolaPlaybackState(): void {
+    if (!this.isBrowser()) {
+      return;
+    }
+
+    const barEmail = this.getBarEmail();
+
+    if (!barEmail) {
+      this.songError = 'No se ha encontrado el email del bar en la sesión.';
+      return;
+    }
+
+    forkJoin({
+      queue: this.queueService.getQueue(barEmail),
+      library: this.queueService.getLibrary(barEmail)
+    }).subscribe({
+      next: ({ queue, library }) => {
+        this.queue = queue || [];
+        this.libraryTracks = library || [];
+        this.inspectSpotifyPlaybackAndAdvanceIfNeeded();
         this.cdr.detectChanges();
-        return;
+      },
+      error: (err) => {
+        console.error('Error cargando estado de gramola:', err);
+        this.songError = 'No se ha podido cargar la cola o la lista del bar.';
       }
+    });
+  }
 
-      this.title = '';
-      this.artist = '';
-      this.albumCover = '';
+  private inspectSpotifyPlaybackAndAdvanceIfNeeded(): void {
+    this.spoti.getCurrentlyPlaying().subscribe({
+      next: (result) => {
+        if (result?.item && result.is_playing) {
+          this.updateNowPlaying(result.item);
+          this.synchroniseBackendWithSpotify(result.item, result.progress_ms || 0);
+          this.cdr.detectChanges();
+          return;
+        }
 
-      this.restartBarMusicIfNeeded();
+        this.clearNowPlaying();
+        this.playNextGramolaTrack('Spotify está parado o no hay canción activa.');
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error obteniendo canción actual:', err);
+        this.songError = 'No se ha podido obtener la canción actual de Spotify.';
+      }
+    });
+  }
 
-      this.cdr.detectChanges();
-    },
-    error: (err) => {
-      console.error('Error obteniendo canción actual:', err);
-      this.songError = 'No se ha podido obtener la canción actual de Spotify.';
+  private updateNowPlaying(item: any): void {
+    this.title = item.name || '';
+    this.artist = item.artists?.[0]?.name || '';
+    this.albumCover = item.album?.images?.[1]?.url || item.album?.images?.[0]?.url || '';
+  }
+
+  private clearNowPlaying(): void {
+    this.title = '';
+    this.artist = '';
+    this.albumCover = '';
+  }
+
+  private synchroniseBackendWithSpotify(item: any, progressMs: number): void {
+    const spotifyId = item?.id;
+
+    if (!spotifyId) {
+      return;
     }
-  });
-}
-  private restartBarMusicIfNeeded(): void {
-  if (this.barMusicRestarting) {
-    return;
-  }
 
-  if (!this.libraryTracks || this.libraryTracks.length === 0) {
-    return;
-  }
+    const queuedTrack = this.findQueuedTrackBySpotifyId(spotifyId);
+    const libraryTrack = this.findLibraryTrackBySpotifyId(spotifyId);
 
-  if (this.queue && this.queue.length > 0) {
-    return;
-  }
-
-  const uris = this.libraryTracks
-    .map(track => track.spotifyUri)
-    .filter(uri => !!uri);
-
-  if (uris.length === 0) {
-    return;
-  }
-
-  this.barMusicRestarting = true;
-
-  this.spoti.playUris(uris).subscribe({
-    next: () => {
-      this.barMusicRestarting = false;
-      this.showSuccessMessage('La lista del bar vuelve a empezar.', 2500);
-      this.getCurrentSong();
-    },
-    error: (err) => {
-      this.barMusicRestarting = false;
-      console.error('Error reiniciando la lista del bar:', err);
+    if (queuedTrack) {
+      this.currentGramolaTrack = queuedTrack;
+      this.markQueuedTrackAsConsumed(queuedTrack);
+    } else if (libraryTrack) {
+      this.currentGramolaTrack = libraryTrack;
+      this.updateCurrentLibraryIndex(libraryTrack);
+    } else if (!this.transitionInProgress) {
+      this.playNextGramolaTrack('Spotify ha cambiado a una canción externa a la gramola.');
+      return;
     }
-  });
-}
 
-  private markCurrentTrackAsPlayedIfNeeded(currentSpotifyId: string): void {
-    const queuedTrack = this.queue.find(track =>
-      track.spotifyId === currentSpotifyId &&
+    const durationMs = item.duration_ms || 0;
+    const remainingMs = durationMs - progressMs;
+
+    if (durationMs > 0 && remainingMs <= this.endThresholdMs) {
+      this.scheduleNextTrack(Math.max(remainingMs + 400, 400));
+    }
+  }
+
+  private scheduleNextTrack(delayMs: number): void {
+    if (this.transitionScheduled || this.transitionInProgress) {
+      return;
+    }
+
+    this.transitionScheduled = true;
+
+    setTimeout(() => {
+      this.transitionScheduled = false;
+      this.playNextGramolaTrack('La canción actual ha terminado.');
+    }, delayMs);
+  }
+
+  private playNextGramolaTrack(reason: string): void {
+    if (this.transitionInProgress) {
+      return;
+    }
+
+    const nextTrack = this.selectNextTrack();
+
+    if (!nextTrack) {
+      return;
+    }
+
+    if (!nextTrack.spotifyUri) {
+      this.songError = 'La siguiente canción no tiene URI válida de Spotify.';
+      return;
+    }
+
+    this.transitionInProgress = true;
+
+    this.spoti.playTrack(nextTrack.spotifyUri).subscribe({
+      next: () => {
+        this.currentGramolaTrack = nextTrack;
+
+        if (nextTrack.queued) {
+          this.markQueuedTrackAsConsumed(nextTrack);
+        } else {
+          this.updateCurrentLibraryIndex(nextTrack);
+        }
+
+        this.transitionInProgress = false;
+        this.songError = undefined;
+        this.updateDisplayedTrackFromBackendTrack(nextTrack);
+        this.refreshGramolaListsOnly();
+
+        console.log('Gramola reproduce siguiente canción:', reason, nextTrack.title);
+      },
+      error: (err) => {
+        console.error('Error reproduciendo siguiente canción de la gramola:', err);
+        this.transitionInProgress = false;
+        this.songError = 'No se ha podido reproducir la siguiente canción. Abre Spotify en un dispositivo activo y comprueba que la cuenta sea Premium.';
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  private selectNextTrack(): any | null {
+    const nextPaidTrack = this.queue.find(track =>
       track.queued === true &&
       !track.playedAt
     );
 
-    if (!queuedTrack) {
+    if (nextPaidTrack) {
+      return nextPaidTrack;
+    }
+
+    return this.selectNextLibraryTrack();
+  }
+
+  private selectNextLibraryTrack(): any | null {
+    if (!this.libraryTracks || this.libraryTracks.length === 0) {
+      return null;
+    }
+
+    const safeCurrentIndex = this.currentLibraryIndex >= 0
+      ? this.currentLibraryIndex
+      : this.findLibraryIndexByCurrentTrack();
+
+    const nextIndex = (safeCurrentIndex + 1) % this.libraryTracks.length;
+
+    return this.libraryTracks[nextIndex];
+  }
+
+  private findLibraryIndexByCurrentTrack(): number {
+    if (!this.currentGramolaTrack?.spotifyId) {
+      return -1;
+    }
+
+    return this.libraryTracks.findIndex(track =>
+      track.spotifyId === this.currentGramolaTrack.spotifyId
+    );
+  }
+
+  private findQueuedTrackBySpotifyId(spotifyId: string): any | null {
+    return this.queue.find(track =>
+      track.spotifyId === spotifyId &&
+      track.queued === true &&
+      !track.playedAt
+    ) || null;
+  }
+
+  private findLibraryTrackBySpotifyId(spotifyId: string): any | null {
+    return this.libraryTracks.find(track =>
+      track.spotifyId === spotifyId
+    ) || null;
+  }
+
+  private updateCurrentLibraryIndex(track: any): void {
+    const index = this.libraryTracks.findIndex(libraryTrack =>
+      libraryTrack.id === track.id
+    );
+
+    if (index >= 0) {
+      this.currentLibraryIndex = index;
+      this.writeLibraryIndexToSession(index);
+    }
+  }
+
+  private updateDisplayedTrackFromBackendTrack(track: any): void {
+    this.title = track.title || '';
+    this.artist = track.artist || '';
+    this.albumCover = '';
+    this.cdr.detectChanges();
+  }
+
+  private markQueuedTrackAsConsumed(track: any): void {
+    if (!track?.id || track.playedAt) {
       return;
     }
 
-    this.queueService.markAsPlayed(queuedTrack.id).subscribe({
+    track.playedAt = Date.now();
+    track.queued = false;
+
+    this.queueService.markAsPlayed(track.id).subscribe({
       next: () => {
-        this.loadQueue();
-        this.loadLibrary();
+        this.refreshGramolaListsOnly();
       },
       error: (err) => {
-        console.error('Error marcando canción como reproducida:', err);
+        console.error('Error marcando canción pagada como reproducida:', err);
+      }
+    });
+  }
+
+  private refreshGramolaListsOnly(): void {
+    const barEmail = this.getBarEmail();
+
+    if (!barEmail) {
+      return;
+    }
+
+    forkJoin({
+      queue: this.queueService.getQueue(barEmail),
+      library: this.queueService.getLibrary(barEmail)
+    }).subscribe({
+      next: ({ queue, library }) => {
+        this.queue = queue || [];
+        this.libraryTracks = library || [];
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error refrescando listas de gramola:', err);
       }
     });
   }
@@ -232,7 +411,6 @@ export class MusicComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.libraryTracks = data || [];
         this.cdr.detectChanges();
-        this.startBarMusicIfNeeded();
       },
       error: (err) => {
         console.error('Error cargando la lista del bar:', err);
@@ -424,8 +602,7 @@ export class MusicComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         }, 3000);
 
-        this.loadQueue();
-        this.loadLibrary();
+        this.refreshGramolaPlaybackState();
         this.cdr.detectChanges();
       },
       error: (err) => {
@@ -457,15 +634,14 @@ export class MusicComponent implements OnInit, OnDestroy {
 
     this.queueService.addTrackToQueue(track).subscribe({
       next: () => {
-        this.loadLibrary();
-        this.loadQueue();
+        this.refreshGramolaPlaybackState();
 
         if (isCurrentUserOwner) {
-          this.showSuccessMessage('Canción añadida gratis a la lista del bar.');
+          this.showSuccessMessage('Canción añadida gratis a la lista normal del bar.');
           return;
         }
 
-        this.sendPaidTrackToSpotifyQueue(spotifyTrack);
+        this.showSuccessMessage('Canción pagada y añadida a la cola prioritaria. Sonará cuando termine la actual.');
       },
       error: (err) => {
         console.error('Error guardando canción en base de datos:', err);
@@ -491,23 +667,6 @@ export class MusicComponent implements OnInit, OnDestroy {
     };
   }
 
-  private sendPaidTrackToSpotifyQueue(spotifyTrack: any): void {
-    this.spoti.addToSpotifyQueue(spotifyTrack.uri).subscribe({
-      next: () => {
-        this.showSuccessMessage('Canción pagada y añadida para sonar a continuación.');
-        this.loadLibrary();
-        this.loadQueue();
-      },
-      error: (err) => {
-        console.error('Canción guardada en BD, pero no se pudo añadir a la cola de Spotify:', err);
-        this.songError = 'La canción se guardó, pero no se pudo enviar a Spotify. Comprueba que haya un dispositivo activo.';
-        this.loadLibrary();
-        this.loadQueue();
-        this.cdr.detectChanges();
-      }
-    });
-  }
-
   cancelPayment(): void {
     this.isPaying = false;
     this.trackPendingPayment = null;
@@ -516,39 +675,6 @@ export class MusicComponent implements OnInit, OnDestroy {
       this.cardElement.unmount();
       this.cardElement = null;
     }
-  }
-
-  private startBarMusicIfNeeded(): void {
-    if (this.barMusicStarted) {
-      return;
-    }
-
-    if (!this.libraryTracks || this.libraryTracks.length === 0) {
-      return;
-    }
-
-    const uris = this.libraryTracks
-      .map(track => track.spotifyUri)
-      .filter(uri => !!uri);
-
-    if (uris.length === 0) {
-      this.songError = 'La lista del bar no tiene URIs válidas de Spotify.';
-      return;
-    }
-
-    this.barMusicStarted = true;
-
-    this.spoti.playUris(uris).subscribe({
-      next: () => {
-        this.showSuccessMessage('Reproduciendo la lista del bar.');
-        this.getCurrentSong();
-      },
-      error: (err) => {
-        console.error('Error iniciando la lista del bar:', err);
-        this.barMusicStarted = false;
-        this.songError = 'No se ha podido iniciar la música del bar. Abre Spotify en un dispositivo y vuelve a intentarlo.';
-      }
-    });
   }
 
   logout(): void {
@@ -631,22 +757,22 @@ export class MusicComponent implements OnInit, OnDestroy {
   }
 
   private openOwnerPasswordModal(): void {
-  this.ownerPassword = '';
-  this.ownerPasswordError = null;
-  this.ownerPasswordLoading = false;
-  this.showOwnerPasswordModal = true;
-  this.cdr.detectChanges();
-
-  setTimeout(() => {
     this.ownerPassword = '';
+    this.ownerPasswordError = null;
+    this.ownerPasswordLoading = false;
+    this.showOwnerPasswordModal = true;
     this.cdr.detectChanges();
-  }, 150);
 
-  setTimeout(() => {
-    this.ownerPassword = '';
-    this.cdr.detectChanges();
-  }, 500);
-}
+    setTimeout(() => {
+      this.ownerPassword = '';
+      this.cdr.detectChanges();
+    }, 150);
+
+    setTimeout(() => {
+      this.ownerPassword = '';
+      this.cdr.detectChanges();
+    }, 500);
+  }
 
   private switchToClientMode(): void {
     this.isOwner = false;
@@ -661,7 +787,7 @@ export class MusicComponent implements OnInit, OnDestroy {
     sessionStorage.setItem('isOwner', 'true');
 
     this.cancelPayment();
-    this.showSuccessMessage('Modo bar activado. Las canciones se añadirán gratis a la lista del bar.', 3500);
+    this.showSuccessMessage('Modo bar activado. Las canciones se añadirán gratis a la lista normal del bar.', 3500);
   }
 
   loadTrackPrice(): void {
@@ -749,6 +875,17 @@ export class MusicComponent implements OnInit, OnDestroy {
       this.successMessage = null;
       this.cdr.detectChanges();
     }, duration);
+  }
+
+  private readLibraryIndexFromSession(): number {
+    const rawValue = sessionStorage.getItem(this.libraryIndexKey);
+    const parsedValue = rawValue !== null ? Number(rawValue) : -1;
+
+    return Number.isFinite(parsedValue) ? parsedValue : -1;
+  }
+
+  private writeLibraryIndexToSession(index: number): void {
+    sessionStorage.setItem(this.libraryIndexKey, String(index));
   }
 
   private getBarEmail(): string {
