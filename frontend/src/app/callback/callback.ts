@@ -1,7 +1,7 @@
 import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { SpotiService } from '../spoti';
+import { SpotiService } from '../services/spoti.service';
 
 @Component({
   selector: 'app-callback',

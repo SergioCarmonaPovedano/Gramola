@@ -5,9 +5,9 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { forkJoin, interval, Subscription } from 'rxjs';
 
-import { SpotiService } from '../spoti';
-import { QueueService } from '../queue';
-import { UserService } from '../user';
+import { SpotiService } from '../services/spoti.service';
+import { QueueService } from '../services/queue.service';
+import { UserService } from '../services/user.service';
 
 declare var Stripe: any;
 

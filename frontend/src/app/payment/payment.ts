@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router'; 
 import { loadStripe, Stripe, StripeElements } from '@stripe/stripe-js';
-import { PaymentService } from './payment.service';
+import { PaymentService } from '../services/payment.service';
 
 @Component({
   selector: 'app-payment',
