@@ -104,14 +104,51 @@ public class UserService {
         return user;
     }
 
-    public User getUserByClientId(String clientId) {
-        if (clientId == null || clientId.isBlank()) {
-            throw new IllegalArgumentException("No se ha recibido el Client ID de Spotify.");
-        }
-
-        return userRepository.findByClientId(clientId)
-                .orElseThrow(() -> new IllegalArgumentException("No existe ningún bar asociado a ese Client ID."));
+     public User getUserForSpotifyAuthorization(String email, String clientId) {
+    if (email == null || email.isBlank()) {
+        throw new IllegalArgumentException("No se ha recibido el email del bar.");
     }
+
+    if (clientId == null || clientId.isBlank()) {
+        throw new IllegalArgumentException("No se ha recibido el Client ID de Spotify.");
+    }
+
+    User user = userRepository.findById(email.trim())
+            .orElseThrow(() -> new IllegalArgumentException("No existe ningún bar con ese email."));
+
+    if (!clientId.trim().equals(user.getClientId())) {
+        throw new IllegalArgumentException("El Client ID recibido no corresponde al bar logueado.");
+    }
+
+    if (!user.isEmailConfirmed() || !user.isPaid() || !user.isActive()) {
+        throw new IllegalArgumentException("La cuenta del bar no está activa.");
+    }
+
+    return user;
+}
+
+/**
+ * Se mantiene por compatibilidad, pero no debe usarse en el flujo OAuth real.
+ * Si varios bares comparten el mismo Client ID de testing, el Client ID por sí solo
+ * ya no identifica de forma única a un bar.
+ */
+public User getUserByClientId(String clientId) {
+    if (clientId == null || clientId.isBlank()) {
+        throw new IllegalArgumentException("No se ha recibido el Client ID de Spotify.");
+    }
+
+    var users = userRepository.findByClientId(clientId.trim());
+
+    if (users.isEmpty()) {
+        throw new IllegalArgumentException("No existe ningún bar asociado a ese Client ID.");
+    }
+
+    if (users.size() > 1) {
+        throw new IllegalArgumentException("Hay varios bares asociados a ese Client ID. Usa el email del bar para desambiguar.");
+    }
+
+    return users.get(0);
+}
 
     public void validateOwnerPassword(String email, String password) throws Exception {
         if (email == null || email.isBlank()) {
@@ -174,28 +211,23 @@ public class UserService {
     }
 
     private void validateSpotifyCredentials(String clientId, String clientSecret, String email) {
-        if (clientId == null || clientId.isBlank()) {
-            throw new IllegalArgumentException("Debes introducir el Client ID de Spotify.");
-        }
-
-        if (clientSecret == null || clientSecret.isBlank()) {
-            throw new IllegalArgumentException("Debes introducir el Client Secret de Spotify.");
-        }
-
-        Optional<User> existingClientIdUser = userRepository.findByClientId(clientId.trim());
-
-        if (existingClientIdUser.isEmpty()) {
-            return;
-        }
-
-        User existingUser = existingClientIdUser.get();
-
-        boolean belongsToSameEmail = existingUser.getEmail().equalsIgnoreCase(email);
-
-        if (!belongsToSameEmail) {
-            throw new IllegalStateException("Este Client ID de Spotify ya está asociado a otro bar.");
-        }
+    if (clientId == null || clientId.isBlank()) {
+        throw new IllegalArgumentException("Debes introducir el Client ID de Spotify.");
     }
+
+    if (clientSecret == null || clientSecret.isBlank()) {
+        throw new IllegalArgumentException("Debes introducir el Client Secret de Spotify.");
+    }
+
+    /*
+     * En producción, lo normal sería que cada bar tuviera sus propias credenciales
+     * de Spotify Developer. Para esta práctica/testing permitimos que varios bares
+     * compartan el mismo clientId/clientSecret.
+     *
+     * La identidad real del bar dentro de Gramola sigue siendo su email, no el
+     * clientId de Spotify. Por eso NO comprobamos unicidad del clientId aquí.
+     */
+}
 
     private void deletePreviousUserIfRegistrationCanBeRepeated(String email) {
         Optional<User> existingUserOpt = userRepository.findById(email);

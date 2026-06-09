@@ -30,44 +30,44 @@ public class SpotiService {
     @Value("${spotify.redirect-uri}")
     private String spotifyRedirectUri;
 
-    public SpotiToken getAuthorizationToken(String code, String clientId) {
-        try {
-            validateAuthorizationRequest(code, clientId);
+    public SpotiToken getAuthorizationToken(String code, String clientId, String email) {
+    try {
+        validateAuthorizationRequest(code, clientId, email);
 
-            User user = userService.getUserByClientId(clientId);
+        User user = userService.getUserForSpotifyAuthorization(email, clientId);
 
-            String clientSecret = user.getClientSecret();
+        String clientSecret = user.getClientSecret();
 
-            if (clientSecret == null || clientSecret.isBlank()) {
-                throw new RuntimeException("El bar no tiene configurado el Client Secret de Spotify.");
-            }
-
-            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-            form.add("code", code);
-            form.add("grant_type", "authorization_code");
-            form.add("redirect_uri", spotifyRedirectUri);
-
-            String authorizationHeader = createBasicAuthHeader(clientId, clientSecret);
-
-            SpotiToken token = restClient.post()
-                    .uri(TOKEN_URL)
-                    .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(SpotiToken.class);
-
-            if (token == null || token.getAccessToken() == null) {
-                throw new RuntimeException("Spotify no devolvió un access_token válido.");
-            }
-
-            return token;
-
-        } catch (Exception e) {
-            System.err.println("Error obteniendo token de Spotify: " + e.getMessage());
-            throw new RuntimeException("Error obteniendo token de Spotify: " + e.getMessage());
+        if (clientSecret == null || clientSecret.isBlank()) {
+            throw new RuntimeException("El bar no tiene configurado el Client Secret de Spotify.");
         }
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("code", code);
+        form.add("grant_type", "authorization_code");
+        form.add("redirect_uri", spotifyRedirectUri);
+
+        String authorizationHeader = createBasicAuthHeader(clientId, clientSecret);
+
+        SpotiToken token = restClient.post()
+                .uri(TOKEN_URL)
+                .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
+                .retrieve()
+                .body(SpotiToken.class);
+
+        if (token == null || token.getAccessToken() == null) {
+            throw new RuntimeException("Spotify no devolvió un access_token válido.");
+        }
+
+        return token;
+
+    } catch (Exception e) {
+        System.err.println("Error obteniendo token de Spotify: " + e.getMessage());
+        throw new RuntimeException("Error obteniendo token de Spotify: " + e.getMessage());
     }
+}
 
     public String searchTracks(String query, String authHeader) {
         try {
@@ -94,19 +94,23 @@ public class SpotiService {
         }
     }
 
-    private void validateAuthorizationRequest(String code, String clientId) {
-        if (code == null || code.isBlank()) {
-            throw new RuntimeException("No se ha recibido el código de autorización de Spotify.");
-        }
-
-        if (clientId == null || clientId.isBlank()) {
-            throw new RuntimeException("No se ha recibido el Client ID de Spotify.");
-        }
-
-        if (spotifyRedirectUri == null || spotifyRedirectUri.isBlank()) {
-            throw new RuntimeException("spotify.redirect-uri no está configurado.");
-        }
+    private void validateAuthorizationRequest(String code, String clientId, String email) {
+    if (code == null || code.isBlank()) {
+        throw new RuntimeException("No se ha recibido el código de autorización de Spotify.");
     }
+
+    if (clientId == null || clientId.isBlank()) {
+        throw new RuntimeException("No se ha recibido el Client ID de Spotify.");
+    }
+
+    if (email == null || email.isBlank()) {
+        throw new RuntimeException("No se ha recibido el email del bar.");
+    }
+
+    if (spotifyRedirectUri == null || spotifyRedirectUri.isBlank()) {
+        throw new RuntimeException("spotify.redirect-uri no está configurado.");
+    }
+}
 
     private String createBasicAuthHeader(String clientId, String clientSecret) {
         String credentials = clientId.trim() + ":" + clientSecret.trim();

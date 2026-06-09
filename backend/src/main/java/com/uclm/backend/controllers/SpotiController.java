@@ -21,23 +21,24 @@ public class SpotiController {
     private SpotiService spotiService;
 
     @GetMapping("/getAuthorizationToken")
-    public ResponseEntity<?> getAuthorizationToken(
-            @RequestParam String code,
-            @RequestParam String clientId
-    ) {
-        try {
-            SpotiToken token = spotiService.getAuthorizationToken(code, clientId);
+public ResponseEntity<?> getAuthorizationToken(
+        @RequestParam String code,
+        @RequestParam String clientId,
+        @RequestParam String email
+) {
+    try {
+        SpotiToken token = spotiService.getAuthorizationToken(code, clientId, email);
 
-            return ResponseEntity.ok(token);
+        return ResponseEntity.ok(token);
 
-        } catch (Exception e) {
-            System.err.println("Error obteniendo token de Spotify: " + e.getMessage());
+    } catch (Exception e) {
+        System.err.println("Error obteniendo token de Spotify: " + e.getMessage());
 
-            return ResponseEntity
-                    .badRequest()
-                    .body(Map.of("message", e.getMessage()));
-        }
+        return ResponseEntity
+                .badRequest()
+                .body(Map.of("message", e.getMessage()));
     }
+}
 
     @GetMapping("/search")
     public ResponseEntity<?> searchTracks(

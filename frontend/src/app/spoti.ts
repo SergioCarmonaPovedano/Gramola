@@ -18,20 +18,27 @@ export class SpotiService {
   ) {}
 
   getAuthorizationToken(code: string): Observable<any> {
-    const clientId = this.getFromSession('clientId');
+  const clientId = this.getFromSession('clientId');
+  const userEmail = this.getFromSession('userEmail');
 
-    if (!clientId) {
-      console.warn('No hay Client ID de Spotify guardado en sesión.');
-      return EMPTY;
-    }
-
-    const url =
-      `${this.backendSpotiUrl}/getAuthorizationToken` +
-      `?code=${encodeURIComponent(code)}` +
-      `&clientId=${encodeURIComponent(clientId)}`;
-
-    return this.http.get<any>(url);
+  if (!clientId) {
+    console.warn('No hay Client ID de Spotify guardado en sesión.');
+    return EMPTY;
   }
+
+  if (!userEmail) {
+    console.warn('No hay email del bar guardado en sesión.');
+    return EMPTY;
+  }
+
+  const url =
+    `${this.backendSpotiUrl}/getAuthorizationToken` +
+    `?code=${encodeURIComponent(code)}` +
+    `&clientId=${encodeURIComponent(clientId)}` +
+    `&email=${encodeURIComponent(userEmail)}`;
+
+  return this.http.get<any>(url);
+}
 
   getDevices(): Observable<any> {
     const headers = this.createSpotifyHeaders();
