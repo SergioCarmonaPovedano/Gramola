@@ -1,0 +1,100 @@
+<div class="register-container">
+  <h2>Registro de bar</h2>
+  <p class="register-subtitle">
+    Crea la cuenta de tu bar para empezar a usar La Gramola.
+  </p>
+
+  <form (ngSubmit)="register()" autocomplete="off">
+    <div class="form-group">
+      <label for="barName">Nombre del bar</label>
+      <input
+        id="barName"
+        type="text"
+        name="barName"
+        [(ngModel)]="barName"
+        placeholder="Ej: Bar La Esquina"
+        autocomplete="off"
+        required>
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email del bar</label>
+      <input
+        id="email"
+        type="email"
+        name="email"
+        [(ngModel)]="email"
+        placeholder="correo@bar.com"
+        autocomplete="off"
+        required>
+    </div>
+
+    <div class="form-group">
+      <label for="password">Contraseña</label>
+      <input
+        id="password"
+        type="password"
+        name="password"
+        [(ngModel)]="password"
+        placeholder="Introduce una contraseña"
+        autocomplete="new-password"
+        required>
+    </div>
+
+    <div class="form-group">
+      <label for="confirmPassword">Confirmar contraseña</label>
+      <input
+        id="confirmPassword"
+        type="password"
+        name="confirmPassword"
+        [(ngModel)]="confirmPassword"
+        placeholder="Repite la contraseña"
+        autocomplete="new-password"
+        required>
+    </div>
+
+    <div class="form-group">
+      <label for="clientId">Client ID de Spotify</label>
+      <input
+        id="clientId"
+        type="text"
+        name="spotifyClientId"
+        [(ngModel)]="clientId"
+        placeholder="Client ID de tu aplicación de Spotify"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required>
+    </div>
+
+    <div class="form-group">
+      <label for="clientSecret">Client Secret de Spotify</label>
+      <input
+        id="clientSecret"
+        type="password"
+        name="spotifyClientSecret"
+        [(ngModel)]="clientSecret"
+        placeholder="Client Secret de tu aplicación de Spotify"
+        autocomplete="new-password"
+        autocapitalize="off"
+        spellcheck="false"
+        required>
+    </div>
+
+    <button type="submit">
+      Registrar bar
+    </button>
+  </form>
+
+  <div
+    *ngIf="message"
+    class="message-box"
+    [class.error-box]="hasError"
+    [class.success-box]="!hasError">
+    {{ message }}
+  </div>
+
+  <div class="login-link">
+    <a href="/login">Ya tengo cuenta</a>
+  </div>
+</div>

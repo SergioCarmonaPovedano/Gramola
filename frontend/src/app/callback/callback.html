@@ -1,0 +1,25 @@
+<div class="callback-page">
+  <div class="callback-card">
+    <div class="brand-icon">♫</div>
+
+    <h1>La Gramola</h1>
+
+    <div class="loader" *ngIf="loading"></div>
+
+    <div class="success-mark" *ngIf="!loading && !errorMessage">
+      ✓
+    </div>
+
+    <div class="error-mark" *ngIf="errorMessage">
+      !
+    </div>
+
+    <h2>{{ title }}</h2>
+
+    <p>{{ message }}</p>
+
+    <div class="error-box" *ngIf="errorMessage">
+      {{ errorMessage }}
+    </div>
+  </div>
+</div>

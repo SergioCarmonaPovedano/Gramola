@@ -1,0 +1,92 @@
+<div class="payment-page">
+  <div class="payment-card">
+
+    <div class="brand-header">
+      <div class="brand-icon">♫</div>
+      <h1>La Gramola</h1>
+      <p>Activa tu suscripción y empieza a gestionar la música de tu bar.</p>
+    </div>
+
+    <!-- SELECCIÓN DE PLANES -->
+    <div *ngIf="!selectedPlan" class="selection-container">
+      <div class="section-heading">
+        <h2>Elige tu suscripción</h2>
+        <p>Selecciona el plan que mejor se adapte a tu bar.</p>
+      </div>
+
+      <div class="plans-grid">
+        <div 
+          *ngFor="let plan of plans" 
+          class="plan-card">
+
+          <div 
+            class="plan-badge" 
+            *ngIf="plan.name && plan.name.toLowerCase().includes('anual')">
+            Recomendado
+          </div>
+
+          <h3>{{ plan.name }}</h3>
+
+          <div class="price">
+            {{ plan.price | number:'1.2-2' }} €
+          </div>
+
+          <p class="plan-description">
+            Acceso completo al panel del bar, gestión de canciones y pagos de clientes.
+          </p>
+
+          <ul class="plan-features">
+            <li>Gestión de canciones del bar</li>
+            <li>Pago de canciones por clientes</li>
+            <li>Integración con Spotify</li>
+          </ul>
+
+          <button 
+            type="button"
+            (click)="selectPlan(plan)" 
+            class="btn-primary">
+            Seleccionar {{ plan.name }}
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="message" class="message-box error-box">
+        {{ message }}
+      </div>
+    </div>
+
+    <!-- PAGO STRIPE -->
+    <div *ngIf="selectedPlan" class="payment-element-container">
+      <div class="section-heading">
+        <h2>Finalizar pago</h2>
+        <p>Introduce tus datos de pago para activar la cuenta del bar.</p>
+      </div>
+
+      <div class="selected-plan-box">
+        <span class="selected-label">Plan seleccionado</span>
+        <strong>{{ selectedPlan }}</strong>
+        <span>{{ selectedPrice | number:'1.2-2' }} €</span>
+      </div>
+
+      <div id="payment-element" class="stripe-box"></div>
+
+      <button 
+        type="button"
+        (click)="pay()" 
+        [disabled]="loading" 
+        class="btn-pay">
+        {{ loading ? 'Procesando pago...' : 'Pagar ' + (selectedPrice | number:'1.2-2') + ' €' }}
+      </button>
+
+      <div *ngIf="message" class="message-box error-box">
+        {{ message }}
+      </div>
+    </div>
+
+  </div>
+
+  <div *ngIf="successMessage" class="success-toast">
+    <strong>Pago completado</strong>
+    <span>{{ successMessage }}</span>
+  </div>
+</div>

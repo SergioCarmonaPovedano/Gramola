@@ -1,0 +1,311 @@
+<div class="music-shell">
+  <header class="music-topbar">
+    <div class="brand-block">
+      <div class="brand-icon">♫</div>
+      <div>
+        <h1>La Gramola</h1>
+        <p>Panel del bar · música, cola y reproducción</p>
+      </div>
+    </div>
+
+    <div class="top-toolbar">
+      <div class="mode-status">
+        <span 
+          class="mode-badge"
+          [class.bar-badge]="isOwner"
+          [class.client-badge]="!isOwner">
+          {{ isOwner ? 'Modo bar' : 'Modo cliente' }}
+        </span>
+
+        <span class="mode-description">
+          {{ isOwner ? 'Gestión interna de la gramola' : 'Vista de cliente para pedir canciones' }}
+        </span>
+      </div>
+
+      <div class="top-actions">
+        <button 
+          class="toolbar-btn switch-btn" 
+          type="button"
+          (click)="toggleUserMode()">
+          {{ isOwner ? 'Cambiar a cliente' : 'Cambiar a bar' }}
+        </button>
+
+        <button 
+          *ngIf="isOwner"
+          class="toolbar-btn logout-btn" 
+          type="button"
+          (click)="logout()">
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <section class="music-dashboard">
+    <article class="card dashboard-card now-playing-card">
+      <div class="card-header">
+        <div>
+          <strong class="card-title">Sonando ahora</strong>
+          <span class="card-subtitle">Reproducción actual de Spotify</span>
+        </div>
+        <button class="link-btn secondary-btn" type="button" (click)="getCurrentSong()">
+          Recargar
+        </button>
+      </div>
+
+      <div class="now-playing-body">
+        <div class="album-frame" *ngIf="albumCover; else noCover">
+          <img [src]="albumCover" alt="Carátula del disco">
+        </div>
+
+        <ng-template #noCover>
+          <div class="album-frame empty-cover">♫</div>
+        </ng-template>
+
+        <div class="track-main-info">
+          <span class="status-pill">En directo</span>
+          <h2>{{ title || 'Nada sonando' }}</h2>
+          <h4>{{ artist || 'Sin artista' }}</h4>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card queue-card">
+      <div class="card-header">
+        <div>
+          <strong class="card-title">Cola pagada pendiente</strong>
+          <span class="card-subtitle">Canciones que se han colado pagando</span>
+        </div>
+        <button class="link-btn secondary-btn" type="button" (click)="loadQueue()">
+          Recargar
+        </button>
+      </div>
+
+      <div class="list compact-list">
+        <div *ngIf="queue.length === 0" class="empty-state">
+          No hay canciones pagadas pendientes de sonar.
+        </div>
+
+        <div class="row track-row" *ngFor="let track of queue; let i = index; trackBy: trackBySpotifyId">
+          <div class="track-index">{{ i + 1 }}</div>
+          <div class="track-text">
+            <strong>{{ track.title }}</strong>
+            <span>{{ track.artist }}</span>
+          </div>
+          <span class="tag paid-tag" *ngIf="track.amountPaid">
+            {{ track.amountPaid | currency:'EUR' }}
+          </span>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card search-card">
+      <div class="card-header search-header">
+        <div>
+          <strong class="card-title">Buscar canción</strong>
+          <span class="card-subtitle">
+            {{ isOwner ? 'Añade canciones gratis a la lista del bar' : 'Busca y paga para colar una canción' }}
+          </span>
+        </div>
+
+        <div class="mini-price-box" *ngIf="isOwner">
+          <span class="mini-price-label">Precio cliente</span>
+
+          <div class="mini-price-controls">
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [(ngModel)]="newTrackPrice"
+              placeholder="2.00">
+
+            <button 
+              type="button"
+              class="mini-price-btn"
+              (click)="saveTrackPrice()">
+              Guardar
+            </button>
+          </div>
+
+          <small>Actual: {{ currentPrice | currency:'EUR' }}</small>
+
+          <small class="mini-price-success" *ngIf="priceMessage">
+            {{ priceMessage }}
+          </small>
+
+          <small class="mini-price-error" *ngIf="priceError">
+            {{ priceError }}
+          </small>
+        </div>
+      </div>
+
+      <div class="list search-panel">
+        <div class="search-bar">
+          <input 
+            id="gramolaSongSearch"
+            type="text"
+            name="gramolaSongSearchNoAutofill"
+            #searchInput 
+            placeholder="Escribe una canción o artista..."
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            (input)="onSearchInputChange(searchInput.value)">
+
+          <button class="link-btn" type="button" (click)="search(searchInput.value)">
+            Buscar
+          </button>
+        </div>
+
+        <div *ngIf="searchResults.length === 0" class="empty-state soft-empty">
+          Busca una canción para añadirla a la gramola.
+        </div>
+
+        <div class="row search-result-row" *ngFor="let track of searchResults; trackBy: trackBySpotifyId">
+          <div class="track-text">
+            <strong>{{ track.name }}</strong>
+            <span>{{ track.artists[0].name }}</span>
+          </div>
+          <button class="link-btn add-btn" type="button" (click)="addToQueue(track)">
+            {{ isOwner ? 'Añadir a la lista' : 'Pagar y colar' }}
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card library-card">
+      <div class="card-header">
+        <div>
+          <strong class="card-title">Lista de canciones del bar</strong>
+          <span class="card-subtitle">Repertorio cargado desde la base de datos</span>
+        </div>
+        <button class="link-btn secondary-btn" type="button" (click)="loadLibrary()">
+          Recargar
+        </button>
+      </div>
+
+      <div class="list compact-list">
+        <div *ngIf="libraryTracks.length === 0" class="empty-state">
+          El bar todavía no tiene canciones añadidas.
+        </div>
+
+        <div class="row track-row" *ngFor="let track of libraryTracks; let i = index; trackBy: trackBySpotifyId">
+          <div class="track-index">{{ i + 1 }}</div>
+          <div class="track-text">
+            <strong>{{ track.title }}</strong>
+            <span>{{ track.artist }}</span>
+          </div>
+          <span class="tag client-tag" *ngIf="track.paid">Cliente</span>
+          <span class="tag bar-tag" *ngIf="!track.paid">Bar</span>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card payment-card" *ngIf="isPaying">
+      <div class="card-header payment-header">
+        <div>
+          <strong class="card-title">Pagar canción</strong>
+          <span class="card-subtitle">{{ trackPendingPayment?.name }}</span>
+        </div>
+        <span class="price-pill">{{ currentPrice | currency:'EUR' }}</span>
+      </div>
+
+      <div class="list payment-body">
+        <p>
+          Introduce tu tarjeta para añadir esta canción a la cola. El importe de
+          <strong>{{ currentPrice | currency:'EUR' }}</strong> se cargará de forma segura.
+        </p>
+
+        <div id="card-element" class="stripe-card-element"></div>
+        <div id="card-error" class="stripe-card-error"></div>
+
+        <div class="payment-actions">
+          <button class="link-btn pay-btn" type="button" (click)="processPayment()">
+            Pagar {{ currentPrice | currency:'EUR' }}
+          </button>
+          <button class="link-btn danger-btn" type="button" (click)="cancelPayment()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card devices-card">
+      <div class="card-header">
+        <div>
+          <strong class="card-title">Dispositivos</strong>
+          <span class="card-subtitle">Reproductores disponibles</span>
+        </div>
+        <button class="link-btn secondary-btn" type="button" (click)="getDevices()">
+          Recargar
+        </button>
+      </div>
+
+      <div class="list compact-list">
+        <div *ngIf="devices.length === 0" class="empty-state">
+          No hay dispositivos activos.
+        </div>
+
+        <div class="row device-row" *ngFor="let device of devices">
+          <div class="track-text">
+            <strong>{{ device.name }}</strong>
+            <span>{{ device.type }}</span>
+          </div>
+          <span class="tag active-tag" *ngIf="device.is_active">Activo</span>
+        </div>
+      </div>
+    </article>
+  </section>
+</div>
+
+<div class="owner-modal-backdrop" *ngIf="showOwnerPasswordModal">
+  <div class="owner-modal">
+    <div class="owner-modal-icon">🔒</div>
+
+    <h2>Acceso al modo bar</h2>
+
+    <p>
+      Introduce la contraseña del bar para volver a la gestión interna de La Gramola.
+    </p>
+
+    <form autocomplete="off" (ngSubmit)="confirmOwnerMode()">
+      <input type="text" name="fake-owner-user" autocomplete="username" style="display:none">
+      <input type="password" name="fake-owner-password" autocomplete="new-password" style="display:none">
+
+      <input
+        id="gramolaOwnerPassword"
+        type="password"
+        name="gramolaOwnerPasswordNoAutofill"
+        [(ngModel)]="ownerPassword"
+        placeholder="Contraseña del bar"
+        autocomplete="new-password"
+        autocapitalize="off"
+        spellcheck="false">
+
+      <div class="owner-modal-error" *ngIf="ownerPasswordError">
+        {{ ownerPasswordError }}
+      </div>
+
+      <div class="owner-modal-actions">
+        <button
+          type="button"
+          class="owner-modal-cancel"
+          (click)="closeOwnerPasswordModal()"
+          [disabled]="ownerPasswordLoading">
+          Cancelar
+        </button>
+
+        <button
+          type="submit"
+          class="owner-modal-confirm"
+          [disabled]="ownerPasswordLoading">
+          {{ ownerPasswordLoading ? 'Comprobando...' : 'Entrar como bar' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div *ngIf="successMessage" class="custom-toast">
+  {{ successMessage }}
+</div>

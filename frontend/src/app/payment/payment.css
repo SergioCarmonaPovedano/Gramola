@@ -1,0 +1,330 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(29, 185, 84, 0.22), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(33, 150, 243, 0.12), transparent 30%),
+    #101010;
+  color: #ffffff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.payment-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.payment-card {
+  width: 100%;
+  max-width: 980px;
+  background: linear-gradient(180deg, rgba(28, 28, 28, 0.98), rgba(18, 18, 18, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  padding: 38px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
+  box-sizing: border-box;
+  animation: slideUpFade 0.45s ease both;
+}
+
+.brand-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.brand-icon {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  color: #050505;
+  font-size: 38px;
+  font-weight: 900;
+  box-shadow: 0 12px 30px rgba(29, 185, 84, 0.34);
+}
+
+.brand-header h1 {
+  margin: 0;
+  font-size: 2.15rem;
+  letter-spacing: -0.04em;
+}
+
+.brand-header p {
+  margin: 10px auto 0;
+  max-width: 560px;
+  color: #a7a7a7;
+  line-height: 1.45;
+}
+
+.section-heading {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  color: #ffffff;
+}
+
+.section-heading p {
+  margin: 8px 0 0;
+  color: #a7a7a7;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  padding: 28px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.plan-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(29, 185, 84, 0.45);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    0 0 28px rgba(29, 185, 84, 0.08);
+}
+
+.plan-badge {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(29, 185, 84, 0.14);
+  color: #1ed760;
+  border: 1px solid rgba(29, 185, 84, 0.35);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.plan-card h3 {
+  margin: 0 0 14px;
+  color: #ffffff;
+  font-size: 1.35rem;
+}
+
+.price {
+  color: #1ed760;
+  font-size: 2.35rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  margin-bottom: 16px;
+}
+
+.plan-description {
+  margin: 0 0 20px;
+  color: #a7a7a7;
+  line-height: 1.45;
+  font-size: 0.94rem;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.plan-features li {
+  position: relative;
+  padding-left: 22px;
+  color: #d7d7d7;
+  font-size: 0.94rem;
+}
+
+.plan-features li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #1ed760;
+  font-weight: 900;
+}
+
+.btn-primary,
+.btn-pay {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1DB954 0%, #1ed760 100%);
+  color: #061006;
+  font-weight: 900;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: 0 10px 28px rgba(29, 185, 84, 0.28);
+  transition: all 0.25s ease;
+}
+
+.btn-primary:hover,
+.btn-pay:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(29, 185, 84, 0.42);
+}
+
+.btn-pay:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.payment-element-container {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.selected-plan-box {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(29, 185, 84, 0.08);
+  border: 1px solid rgba(29, 185, 84, 0.28);
+}
+
+.selected-label {
+  grid-column: 1 / -1;
+  color: #1ed760;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.selected-plan-box strong {
+  color: #ffffff;
+  font-size: 1.1rem;
+}
+
+.selected-plan-box span:last-child {
+  color: #1ed760;
+  font-weight: 900;
+  font-size: 1.25rem;
+}
+
+.stripe-box {
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.message-box {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.error-box {
+  background: rgba(244, 67, 54, 0.12);
+  border: 1px solid rgba(244, 67, 54, 0.55);
+  color: #ff8a80;
+}
+
+.success-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 99999;
+  padding: 16px 22px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  color: #061006;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: toastIn 0.25s ease;
+}
+
+.success-toast strong {
+  display: block;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.success-toast span {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 780px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-card {
+    padding: 30px 22px;
+  }
+
+  .brand-header h1 {
+    font-size: 1.7rem;
+  }
+
+  .selected-plan-box {
+    grid-template-columns: 1fr;
+  }
+
+  .success-toast {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+  }
+}
