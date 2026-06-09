@@ -44,4 +44,11 @@ public class TrackController {
 
         return ResponseEntity.ok(updatedTrack);
     }
+
+    @PutMapping("/queue/clear")
+public ResponseEntity<Integer> clearPendingQueue(@RequestParam String barEmail) {
+    int updatedTracks = trackService.clearPendingQueue(barEmail);
+
+    return ResponseEntity.ok(updatedTracks);
+}
 }

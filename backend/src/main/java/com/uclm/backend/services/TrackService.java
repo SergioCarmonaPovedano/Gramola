@@ -5,6 +5,7 @@ import com.uclm.backend.repositories.TrackRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -69,4 +70,11 @@ public class TrackService {
             throw new IllegalArgumentException("No se ha recibido el email del bar.");
         }
     }
+
+    @Transactional
+public int clearPendingQueue(String barEmail) {
+    validateBarEmail(barEmail);
+
+    return trackRepository.clearPendingQueue(barEmail);
+}
 }

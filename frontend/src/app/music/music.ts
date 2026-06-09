@@ -677,76 +677,108 @@ export class MusicComponent implements OnInit, OnDestroy {
     }
   }
 
-  logout(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
+   logout(): void {
+  if (!this.isBrowser()) {
+    return;
+  }
 
-    const isCurrentUserOwner = sessionStorage.getItem('isOwner') === 'true';
+  const isCurrentUserOwner = sessionStorage.getItem('isOwner') === 'true';
 
-    if (!isCurrentUserOwner) {
-      this.songError = 'Solo el propietario puede cerrar la sesión del bar.';
-      this.successMessage = null;
-      this.cdr.detectChanges();
-      return;
-    }
+  if (!isCurrentUserOwner) {
+    this.songError = 'Solo el propietario puede cerrar la sesión del bar.';
+    this.successMessage = null;
+    this.cdr.detectChanges();
+    return;
+  }
 
-    this.autoRefresh?.unsubscribe();
+  const barEmail = this.getBarEmail();
 
+  this.autoRefresh?.unsubscribe();
+
+  const finishLogout = () => {
     sessionStorage.clear();
     this.spoti.spotiToken = '';
-
     this.router.navigateByUrl('/login');
-  }
+  };
 
-  toggleUserMode(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
-
-    if (this.isOwner) {
-      this.switchToClientMode();
-      return;
-    }
-
-    this.openOwnerPasswordModal();
-  }
-
-  confirmOwnerMode(): void {
-    if (!this.isBrowser()) {
-      return;
-    }
-
-    const barEmail = this.getBarEmail();
-
-    this.ownerPasswordError = null;
-
-    if (!barEmail) {
-      this.ownerPasswordError = 'No se ha encontrado el email del bar en la sesión.';
-      return;
-    }
-
-    if (!this.ownerPassword || this.ownerPassword.trim() === '') {
-      this.ownerPasswordError = 'Introduce la contraseña del bar.';
-      return;
-    }
-
-    this.ownerPasswordLoading = true;
-    this.cdr.detectChanges();
-
-    this.userService.validateOwnerPassword(barEmail, this.ownerPassword).subscribe({
-      next: () => {
-        this.ownerPasswordLoading = false;
-        this.switchToOwnerMode();
-        this.closeOwnerPasswordModal();
-      },
-      error: (err) => {
-        this.ownerPasswordLoading = false;
-        this.ownerPasswordError = err.error?.message || 'Contraseña incorrecta.';
-        this.cdr.detectChanges();
+  this.spoti.pausePlayback().subscribe({
+    next: () => {
+      if (!barEmail) {
+        finishLogout();
+        return;
       }
-    });
+
+      this.queueService.clearPendingQueue(barEmail).subscribe({
+        next: () => finishLogout(),
+        error: (err) => {
+          console.error('No se pudo limpiar la cola prioritaria:', err);
+          finishLogout();
+        }
+      });
+    },
+    error: (err) => {
+      console.error('No se pudo pausar Spotify:', err);
+
+      if (!barEmail) {
+        finishLogout();
+        return;
+      }
+
+      this.queueService.clearPendingQueue(barEmail).subscribe({
+        next: () => finishLogout(),
+        error: () => finishLogout()
+      });
+    }
+  });
+}
+toggleUserMode(): void {
+  if (!this.isBrowser()) {
+    return;
   }
+
+  if (this.isOwner) {
+    this.switchToClientMode();
+    return;
+  }
+
+  this.openOwnerPasswordModal();
+}
+
+confirmOwnerMode(): void {
+  if (!this.isBrowser()) {
+    return;
+  }
+
+  const barEmail = this.getBarEmail();
+
+  this.ownerPasswordError = null;
+
+  if (!barEmail) {
+    this.ownerPasswordError = 'No se ha encontrado el email del bar en la sesión.';
+    return;
+  }
+
+  if (!this.ownerPassword || this.ownerPassword.trim() === '') {
+    this.ownerPasswordError = 'Introduce la contraseña del bar.';
+    return;
+  }
+
+  this.ownerPasswordLoading = true;
+  this.cdr.detectChanges();
+
+  this.userService.validateOwnerPassword(barEmail, this.ownerPassword).subscribe({
+    next: () => {
+      this.ownerPasswordLoading = false;
+      this.switchToOwnerMode();
+      this.closeOwnerPasswordModal();
+    },
+    error: (err) => {
+      this.ownerPasswordLoading = false;
+      this.ownerPasswordError = err.error?.message || 'Contraseña incorrecta.';
+      this.cdr.detectChanges();
+    }
+  });
+}
 
   closeOwnerPasswordModal(): void {
     this.showOwnerPasswordModal = false;

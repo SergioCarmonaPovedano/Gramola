@@ -29,4 +29,11 @@ export class QueueService {
   markAsPlayed(id: number): Observable<any> {
     return this.http.put<any>(`${this.apiUrl}/played/${id}`, {});
   }
+
+  clearPendingQueue(barEmail: string): Observable<number> {
+  return this.http.put<number>(
+    `${this.apiUrl}/queue/clear?barEmail=${encodeURIComponent(barEmail)}`,
+    {}
+  );
+}
 }

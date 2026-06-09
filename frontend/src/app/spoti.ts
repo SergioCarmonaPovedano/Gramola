@@ -143,6 +143,20 @@ export class SpotiService {
     );
   }
 
+  pausePlayback(): Observable<any> {
+  const headers = this.createSpotifyHeaders();
+
+  if (!headers) {
+    return EMPTY;
+  }
+
+  return this.http.put<any>(
+    `${this.spotifyApiUrl}/me/player/pause`,
+    {},
+    { headers, responseType: 'text' as 'json' }
+  );
+}
+
   private createSpotifyHeaders(): HttpHeaders | null {
     const token = this.getSpotifyToken();
 
