@@ -62,6 +62,12 @@ export class MusicComponent implements OnInit, OnDestroy {
   private transitionInProgress: boolean = false;
   private transitionScheduled: boolean = false;
 
+  /**
+ * Guarda la canción que está sonando porque venía de la cola prioritaria.
+ * Aunque también esté en libraryTracks, no debe mover el índice de la rotación normal.
+ */
+private priorityPlaybackSpotifyId: string | null = null;
+
   constructor(
     private spoti: SpotiService,
     private queueService: QueueService,
@@ -177,33 +183,47 @@ export class MusicComponent implements OnInit, OnDestroy {
   }
 
   private synchroniseBackendWithSpotify(item: any, progressMs: number): void {
-    const spotifyId = item?.id;
+  const spotifyId = item?.id;
 
-    if (!spotifyId) {
-      return;
-    }
-
-    const queuedTrack = this.findQueuedTrackBySpotifyId(spotifyId);
-    const libraryTrack = this.findLibraryTrackBySpotifyId(spotifyId);
-
-    if (queuedTrack) {
-      this.currentGramolaTrack = queuedTrack;
-      this.markQueuedTrackAsConsumed(queuedTrack);
-    } else if (libraryTrack) {
-      this.currentGramolaTrack = libraryTrack;
-      this.updateCurrentLibraryIndex(libraryTrack);
-    } else if (!this.transitionInProgress) {
-      this.playNextGramolaTrack('Spotify ha cambiado a una canción externa a la gramola.');
-      return;
-    }
-
-    const durationMs = item.duration_ms || 0;
-    const remainingMs = durationMs - progressMs;
-
-    if (durationMs > 0 && remainingMs <= this.endThresholdMs) {
-      this.scheduleNextTrack(Math.max(remainingMs + 400, 400));
-    }
+  if (!spotifyId) {
+    return;
   }
+
+  const queuedTrack = this.findQueuedTrackBySpotifyId(spotifyId);
+  const libraryTrack = this.findLibraryTrackBySpotifyId(spotifyId);
+
+  if (queuedTrack) {
+    this.currentGramolaTrack = queuedTrack;
+    this.priorityPlaybackSpotifyId = spotifyId;
+    this.markQueuedTrackAsConsumed(queuedTrack);
+
+  } else if (libraryTrack) {
+    this.currentGramolaTrack = libraryTrack;
+
+    /*
+     * Caso importante:
+     * Una canción pagada también está en la biblioteca normal porque librarySong = true.
+     * Pero si está sonando ahora porque venía de la cola prioritaria, NO debe actualizar
+     * el índice de la rotación normal.
+     */
+    if (this.priorityPlaybackSpotifyId !== spotifyId) {
+      this.priorityPlaybackSpotifyId = null;
+      this.updateCurrentLibraryIndex(libraryTrack);
+    }
+
+  } else if (!this.transitionInProgress) {
+    this.priorityPlaybackSpotifyId = null;
+    this.playNextGramolaTrack('Spotify ha cambiado a una canción externa a la gramola.');
+    return;
+  }
+
+  const durationMs = item.duration_ms || 0;
+  const remainingMs = durationMs - progressMs;
+
+  if (durationMs > 0 && remainingMs <= this.endThresholdMs) {
+    this.scheduleNextTrack(Math.max(remainingMs + 400, 400));
+  }
+}
 
   private scheduleNextTrack(delayMs: number): void {
     if (this.transitionScheduled || this.transitionInProgress) {
@@ -219,61 +239,84 @@ export class MusicComponent implements OnInit, OnDestroy {
   }
 
   private playNextGramolaTrack(reason: string): void {
-    if (this.transitionInProgress) {
-      return;
-    }
-
-    const nextTrack = this.selectNextTrack();
-
-    if (!nextTrack) {
-      return;
-    }
-
-    if (!nextTrack.spotifyUri) {
-      this.songError = 'La siguiente canción no tiene URI válida de Spotify.';
-      return;
-    }
-
-    this.transitionInProgress = true;
-
-    this.spoti.playTrack(nextTrack.spotifyUri).subscribe({
-      next: () => {
-        this.currentGramolaTrack = nextTrack;
-
-        if (nextTrack.queued) {
-          this.markQueuedTrackAsConsumed(nextTrack);
-        } else {
-          this.updateCurrentLibraryIndex(nextTrack);
-        }
-
-        this.transitionInProgress = false;
-        this.songError = undefined;
-        this.updateDisplayedTrackFromBackendTrack(nextTrack);
-        this.refreshGramolaListsOnly();
-
-        console.log('Gramola reproduce siguiente canción:', reason, nextTrack.title);
-      },
-      error: (err) => {
-        console.error('Error reproduciendo siguiente canción de la gramola:', err);
-        this.transitionInProgress = false;
-        this.songError = 'No se ha podido reproducir la siguiente canción. Abre Spotify en un dispositivo activo y comprueba que la cuenta sea Premium.';
-        this.cdr.detectChanges();
-      }
-    });
+  if (this.transitionInProgress) {
+    return;
   }
+
+  const nextTrack = this.selectNextTrack();
+
+  if (!nextTrack) {
+    return;
+  }
+
+  if (!nextTrack.spotifyUri) {
+    this.songError = 'La siguiente canción no tiene URI válida de Spotify.';
+    return;
+  }
+
+  const isPriorityTrack = nextTrack.queued === true && !nextTrack.playedAt;
+
+  this.transitionInProgress = true;
+
+  this.spoti.playTrack(nextTrack.spotifyUri).subscribe({
+    next: () => {
+      this.currentGramolaTrack = nextTrack;
+
+      if (isPriorityTrack) {
+        this.priorityPlaybackSpotifyId = nextTrack.spotifyId;
+        this.markQueuedTrackAsConsumed(nextTrack);
+      } else {
+        this.priorityPlaybackSpotifyId = null;
+        this.updateCurrentLibraryIndex(nextTrack);
+      }
+
+      this.transitionInProgress = false;
+      this.songError = undefined;
+      this.updateDisplayedTrackFromBackendTrack(nextTrack);
+      this.refreshGramolaListsOnly();
+
+      console.log('Gramola reproduce siguiente canción:', reason, nextTrack.title);
+    },
+    error: (err) => {
+      console.error('Error reproduciendo siguiente canción de la gramola:', err);
+      this.transitionInProgress = false;
+      this.songError = 'No se ha podido reproducir la siguiente canción. Abre Spotify en un dispositivo activo y comprueba que la cuenta sea Premium.';
+      this.cdr.detectChanges();
+    }
+  });
+}
 
   private selectNextTrack(): any | null {
-    const nextPaidTrack = this.queue.find(track =>
-      track.queued === true &&
-      !track.playedAt
-    );
+  const nextPaidTrack = this.queue.find(track =>
+    track.queued === true &&
+    !track.playedAt
+  );
 
-    if (nextPaidTrack) {
-      return nextPaidTrack;
-    }
+  if (nextPaidTrack) {
+    /*
+     * Antes de saltar a una prioritaria, guardamos bien la posición normal actual.
+     * Así, cuando termine la prioritaria, continuamos por la siguiente normal.
+     */
+    this.lockCurrentLibraryPositionBeforePriority();
 
-    return this.selectNextLibraryTrack();
+    return nextPaidTrack;
   }
+
+  return this.selectNextLibraryTrack();
+}
+
+  private lockCurrentLibraryPositionBeforePriority(): void {
+  if (this.currentLibraryIndex >= 0) {
+    return;
+  }
+
+  const index = this.findLibraryIndexByCurrentTrack();
+
+  if (index >= 0) {
+    this.currentLibraryIndex = index;
+    this.writeLibraryIndexToSession(index);
+  }
+}
 
   private selectNextLibraryTrack(): any | null {
     if (!this.libraryTracks || this.libraryTracks.length === 0) {
@@ -290,14 +333,22 @@ export class MusicComponent implements OnInit, OnDestroy {
   }
 
   private findLibraryIndexByCurrentTrack(): number {
-    if (!this.currentGramolaTrack?.spotifyId) {
-      return -1;
-    }
-
-    return this.libraryTracks.findIndex(track =>
-      track.spotifyId === this.currentGramolaTrack.spotifyId
-    );
+  if (!this.currentGramolaTrack?.spotifyId) {
+    return -1;
   }
+
+  /*
+   * Si la canción actual venía de la cola prioritaria, aunque también esté
+   * en la biblioteca, no debe usarse como referencia para la rotación normal.
+   */
+  if (this.priorityPlaybackSpotifyId === this.currentGramolaTrack.spotifyId) {
+    return -1;
+  }
+
+  return this.libraryTracks.findIndex(track =>
+    track.spotifyId === this.currentGramolaTrack.spotifyId
+  );
+}
 
   private findQueuedTrackBySpotifyId(spotifyId: string): any | null {
     return this.queue.find(track =>
